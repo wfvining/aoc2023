@@ -72,3 +72,60 @@ in_range(_, _, _) ->
 
 seeds_to_locations({Seeds, Maps}) ->
     [translate(S, Maps) || S <- Seeds].
+
+seeds_to_ranges([]) ->
+    [];
+seeds_to_ranges([Start, Len|Rest]) ->
+    [{Start, Len}|seeds_to_ranges(Rest)].
+
+seeds_to_location_ranges({Seeds, Maps}) ->
+    SeedRanges = seeds_to_ranges(Seeds),
+    lists:flatten([translate_range(S, Maps) || S <- SeedRanges]).
+
+translate_range(Range, []) -> [Range];
+translate_range(Range, [Map|Maps]) ->
+    NewRanges = apply_map_range(Range, Map),
+    lists:concat([translate_range(R, Maps) || R <- NewRanges]).
+
+apply_map_range(Range, []) ->
+    [Range];
+apply_map_range(Range, [M|Map]) ->
+    {Output, RemainingRanges} = apply_map_range1(M, Range),
+    Outputs = [apply_map_range(R, Map) || R <- RemainingRanges],
+    lists:flatten(Output ++ Outputs).
+
+apply_map_range1({DestStart, SrcStart, Len}, {Start, SrcLen})
+  when Start >= SrcStart,
+       Start + SrcLen =< SrcStart + Len ->
+    %% The source range is fully containted
+    StartOffset = Start - SrcStart,
+    {[{DestStart + StartOffset, SrcLen}], []};
+apply_map_range1({DestStart, SrcStart, Len}, {Start, SrcLen})
+  when Start >= SrcStart,
+       Start < SrcStart + Len,
+       Start + SrcLen > SrcStart + Len ->
+    %% The start of the source range overlaps
+    SrcRangeEnd = SrcStart + Len - 1,
+    CoveredLen = SrcRangeEnd - Start + 1,
+    StartOffset = Start - SrcStart,
+    {[{DestStart + StartOffset, CoveredLen}],
+     [{SrcRangeEnd + 1, SrcLen - CoveredLen}]};
+apply_map_range1({DestStart, SrcStart, Len}, {Start, SrcLen})
+  when Start < SrcStart,
+       Start + SrcLen =< SrcStart + Len,
+       Start + SrcLen >= SrcStart ->
+    %% the end of the source range overlaps
+    SrcEnd = Start + SrcLen - 1,
+    CoveredLen = SrcEnd - SrcStart + 1,
+    {[{DestStart, CoveredLen}], [{Start, SrcLen - CoveredLen}]};
+apply_map_range1({DestStart, SrcStart, Len}, {Start, SrcLen})
+  when Start < SrcStart,
+       SrcStart + Len < Start + SrcLen ->
+    %% The source range contains the whole map range
+    PreLen = SrcStart - Start,
+    PostStart = SrcStart + Len,
+    PostLen = (Start + SrcLen) - PostStart,
+    {[{DestStart, Len}], [{Start, PreLen}, {PostStart, PostLen}]};
+apply_map_range1(_, Range) ->
+    %% Not covered
+    {[], [Range]}.
