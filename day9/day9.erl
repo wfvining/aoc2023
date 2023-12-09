@@ -44,16 +44,12 @@ reduce_sequence(Seq, Acc) ->
         true ->
             [Seq|Acc];
         false ->
-            reduce_sequence(reduce_sequence1(Seq), [Seq|Acc])
+            reduce_sequence(reduce(Seq), [Seq|Acc])
     end.
 
-reduce_sequence1(Seq) ->
-    reduce_sequence1(Seq, tl(Seq)).
-
-reduce_sequence1(_, []) ->
-    [];
-reduce_sequence1([X|RestX], [Y|RestY]) ->
-    [Y - X|reduce_sequence1(RestX, RestY)].
+reduce([_]) -> [];
+reduce([X, Y|Rest]) ->
+    [Y - X | reduce([Y|Rest])].
 
 extrapolate_all(Sequences) ->
     [extrapolate_sequence(Seq) || Seq <- Sequences].
