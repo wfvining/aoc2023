@@ -25,17 +25,38 @@ parse_numbers(Numbers) ->
     Ns = string:split(Numbers, ",", all),
     [list_to_integer(N) || N <- Ns].
 
-count_options(Input) ->
-    F = fun ({Str, CheckSum} = I, Acc) ->
-                ValidOptions = valid_options(Str, CheckSum),
-                Acc + if length(ValidOptions) =:= 0 ->
-                              io:format("~p~n", [I]),
-                              0;
-                         true ->
-                              length(ValidOptions)
-                      end
-        end,
-    lists:foldl(F, 0, Input).
+count_valid(Str, CheckSum) ->
+    F = fun(C) -> C =:= $? end,
+    case lists:any(F, Str) of
+        true ->
+            A = lists:flatten(string:replace(Str, "?", ".")),
+            B = lists:flatten(string:replace(Str, "?", "#")),
+            CountA = count_valid1(A, CheckSum),
+            CountB = count_valid1(B, CheckSum),
+            Total = CountA + CountB,
+            store({Str, CheckSum}, Total),
+            Total;
+        false ->
+            case is_valid(Str, CheckSum) of
+                true ->
+                    1;
+                false ->
+                    0
+            end
+    end.
+
+count_valid1(Str, CSum) ->
+    try
+        ets:lookup_element(cache, {Str, CSum}, 2)
+    catch error:badarg ->
+            count_valid(Str, CSum)
+    end.
+
+store(Key, Value) ->
+    ets:insert(cache, {Key, Value}).
+
+init_cache() ->
+    ets:new(cache, [set, named_table]).
 
 valid_options(Str, CheckSum) ->
     Valid = fun (Row) -> is_valid(Row, CheckSum) end,
