@@ -25,66 +25,54 @@ parse_numbers(Numbers) ->
     Ns = string:split(Numbers, ",", all),
     [list_to_integer(N) || N <- Ns].
 
-count_valid(Str, CheckSum) ->
-    F = fun(C) -> C =:= $? end,
-    case lists:any(F, Str) of
-        true ->
-            A = lists:flatten(string:replace(Str, "?", ".")),
-            B = lists:flatten(string:replace(Str, "?", "#")),
-            CountA = count_valid1(A, CheckSum),
-            CountB = count_valid1(B, CheckSum),
-            Total = CountA + CountB,
-            store({Str, CheckSum}, Total),
-            Total;
-        false ->
-            case is_valid(Str, CheckSum) of
-                true ->
-                    1;
+count([], [], Cache) -> {1, Cache};
+count([], _, Cache) -> {0, Cache};
+count(Cfg, [], Cache) ->
+    case lists:member($#, Cfg) of
+        true -> {0, Cache};
+        false -> {1, Cache}
+    end;
+count([$.|Rest] = Cfg, Nums, Cache) ->
+    mcount(Rest, Nums, Cache);
+count([$#|_] = Cfg, [N|Nums], Cache) ->
+    try lists:split(N, Cfg) of
+        {Block, []} ->
+            case lists:member($., Block) of
+                false when length(Cfg) =:= N ->
+                    mcount([], Nums, Cache);
+                _ ->
+                    {0, Cache}
+            end;
+        {Block, [C|Rest]} when C =/= $# ->
+            case lists:member($., Block) of
                 false ->
-                    0
-            end
-    end.
-
-count_valid1(Str, CSum) ->
-    try
-        ets:lookup_element(cache, {Str, CSum}, 2)
+                    mcount(Rest, Nums, Cache);
+                true ->
+                    {0, Cache}
+            end;
+        {_Block, [$#|_Rest]} ->
+            {0, Cache}
     catch error:badarg ->
-            count_valid(Str, CSum)
-    end.
+            {0, Cache}
+    end;
+count([$?|Rest] = Cfg, Nums, Cache) ->
+    {A, Cache1} = mcount(Rest, Nums, Cache),
+    {B, Cache2} = mcount([$#|Rest], Nums, Cache1),
+    Total = A + B,
+    {Total, Cache2}.
 
-store(Key, Value) ->
-    ets:insert(cache, {Key, Value}).
+mcount(Cfg, Nums, Cache) when is_map_key({Cfg, Nums}, Cache) ->
+    {maps:get({Cfg, Nums}, Cache), Cache};
+mcount(Cfg, Nums, Cache) ->
+    {C, Cache1} = count(Cfg, Nums, Cache),
+    Cache2 = maps:put({Cfg, Nums}, C, Cache1),
+    {C, Cache2}.
 
-init_cache() ->
-    ets:new(cache, [set, named_table]).
+count_all(Input) ->
+    F = fun({Cfg, Nums}, Acc) -> {C, _} = mcount(Cfg, Nums, #{}), Acc + C end,
+    lists:foldl(F, 0, [unfold(I) || I <- Input]).
 
-valid_options(Str, CheckSum) ->
-    Valid = fun (Row) -> is_valid(Row, CheckSum) end,
-    lists:filter(Valid, expand(Str)).
-
-expand([]) ->
-    [[]];
-expand([$?|Rest]) ->
-    Suffixes = expand(Rest),
-    [[$#|S] || S <- Suffixes] ++ [[$.|S] || S <- Suffixes];
-expand([C|Rest]) ->
-    Suffixes = expand(Rest),
-    [[C|S] || S <- Suffixes].
-
-is_valid(Row, Check) ->
-    Check1 = checksum(Row),
-    Check1 =:= Check.
-
-checksum(Row) ->
-    checksum(Row, 0, []).
-
-checksum([$#|Rest], N, Counts) ->
-    checksum(Rest, N + 1, Counts);
-checksum([$.|Rest], N, Counts) when N > 0 ->
-    checksum(Rest, 0, [N|Counts]);
-checksum([$.|Rest], 0, Counts) ->
-    checksum(Rest, 0, Counts);
-checksum([], N, Counts) when N > 0 ->
-    lists:reverse([N|Counts]);
-checksum([], 0, Counts) ->
-    lists:reverse(Counts).
+unfold({Cfg, Nums}) ->
+    Nums1 = lists:flatten(lists:duplicate(5, Nums)),
+    Cfg1 = lists:flatten(string:join(lists:duplicate(5, Cfg), "?")),
+    {Cfg1, Nums1}.
