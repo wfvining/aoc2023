@@ -16,9 +16,18 @@ parse_grid(File) ->
             [array:from_list(string:trim(Line)) | parse_grid(File)]
     end.
 
-energized(Grid) ->
-    {Seen, _} = follow_beam(Grid, {{0, 0}, right}, sets:new(), sets:new()),
+energized(Grid, Start) ->
+    {Seen, _} = follow_beam(Grid, Start, sets:new(), sets:new()),
     sets:size(Seen).
+
+mazimize_energy(Grid) ->
+    Width = array:size(array:get(0, Grid)),
+    Height = array:size(Grid),
+    Top = [{{X, 0}, down} || X <- lists:seq(0, Width - 1)],
+    Left = [{{0, Y}, right} || Y <- lists:seq(0, Height - 1)],
+    Bottom = [{{X, Height - 1}, up} || X <- lists:seq(0, Width - 1)],
+    Right = [{{Width - 1, Y}, left} || Y <- lists:seq(0, Height - 1)],
+    lists:max([energized(Grid, Start) || Start <- Top ++ Left ++ Bottom ++ Right]).
 
 get(X, Y, Arr) ->
     array:get(X, array:get(Y, Arr)).
