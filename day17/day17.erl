@@ -26,24 +26,22 @@ height(Grid) ->
 get(X, Y, Grid) ->
     array:get(X, array:get(Y, Grid)).
 
-get_neighbors({{X, Y}, {DX, DY} = Dir, N}, Grid) when N < 3 ->
-    Dirs = [{1, 0}, {-1, 0}, {0, 1}, {0, -1}],
-    Coords = [{{X + NextDX, Y + NextDY},
-               {NextDX, NextDY},
-               if D =:= Dir -> N + 1;
-                  D =/= Dir -> 1
-               end}
-              || {NextDX, NextDY} = D <- Dirs,
-                 D =/= {-DX, -DY}],
+get_neighbors({{X, Y}, {DX, DY} = Dir, N}, Grid) when N =/= 0, N < 4 ->
+    Coords = [{{X + DX, Y + DY}, Dir, N + 1}],
     filter_legal(Grid, Coords);
-get_neighbors({{X, Y}, {DX, DY} = Dir, _}, Grid) ->
-    Dirs = [{1, 0}, {-1, 0}, {0, 1}, {0, -1}],
-    Coords = [{{X + NextDX, Y + NextDY},
-               {NextDX, NextDY},
-               1}
-              || {NextDX, NextDY} = D <- Dirs,
-                 D =/= Dir,
-                 D =/= {-DX, -DY}],
+get_neighbors({{X, Y}, Dir, N}, Grid) when (N >= 4) and (N < 10); N =:= 0 ->
+    Dirs = [{0, 1}, {0, -1}, {1, 0}, {-1, 0}],
+    Coords = [{{X + NDX, Y + NDY}, {NDX, NDY},
+               if D =/= Dir -> 1; D =:= Dir -> N + 1 end}
+              || {NDX, NDY} = D <- Dirs,
+                 Dir =/= {-NDX, -NDY}],
+    filter_legal(Grid, Coords);
+get_neighbors({{X, Y}, Dir, N}, Grid) when N =:= 10 ->
+    Dirs = [{0, 1}, {0, -1}, {1, 0}, {-1, 0}],
+    Coords = [{{X + NDX, Y + NDY}, {NDX, NDY}, 1}
+              || {NDX, NDY} = D <- Dirs,
+                 Dir =/= {-NDX, -NDY},
+                 Dir =/= D],
     filter_legal(Grid, Coords).
 
 dijkstra(Grid, Source, Target) ->
@@ -53,11 +51,11 @@ dijkstra(Grid, Source, Target) ->
     D.
 
 loop(Grid, Q, Parents, Seen, Target) ->
-    {Dist, {Coord, _, _} = Node, Q1} = pq:take_smallest(Q),
+    {Dist, {Coord, _, N} = Node, Q1} = pq:take_smallest(Q),
     if
-        Target =:= Coord ->
+        Target =:= Coord, N >= 4 ->
             {Dist, Parents};
-        Target =/= Coord ->
+        true ->
             case sets:is_element(Node, Seen) of
                 true ->
                     loop(Grid, Q1, Parents, Seen, Target);
