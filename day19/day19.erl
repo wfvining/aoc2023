@@ -79,3 +79,40 @@ apply_workflow([{{Var, Op, N}, O}|Rest], Part) ->
         false ->
             apply_workflow(Rest, Part)
     end.
+
+count_accepted(Workflows) ->
+    count_accepted("in",
+                   #{x => {1, 4000},
+                     m => {1, 4000},
+                     a => {1, 4000},
+                     s => {1, 4000}},
+                   Workflows).
+
+count_accepted("A", Rs, _) ->
+    F = fun(_, {Min, Max}, Acc) ->
+                Acc * (Max - Min + 1)
+        end,
+    maps:fold(F, 1, Rs);
+count_accepted("R", _, _) ->
+    0;
+count_accepted(Cur, Ranges, Workflows) ->
+    Workflow = maps:get(Cur, Workflows),
+    %% for each element in Workflow find the passed range.
+    Rs = pass_ranges(Workflow, Ranges),
+    lists:sum([count_accepted(W, R, Workflows) || {R, W} <- Rs]).
+
+pass_ranges([{default, Dest}], Ranges) ->
+    [{Ranges, Dest}];
+pass_ranges([{{Var, Op, N}, Dest}|Rest], Ranges) ->
+    {Passing, Remaining} = passing_range(Var, Op, N, Ranges),
+    [{Passing, Dest} | pass_ranges(Rest, Remaining)].
+
+passing_range(Var, Op, N, Ranges) ->
+    R = maps:get(Var, Ranges),
+    {Passing, Failing} = split_range(R, Op, N),
+    {Ranges#{Var => Passing}, Ranges#{Var => Failing}}.
+
+split_range({Min, Max}, '<', N) when Min < N, Max >= N ->
+    {{Min, N - 1}, {N, Max}};
+split_range({Min, Max}, '>', N) when Min < N, Max >= N ->
+    {{N + 1, Max}, {Min, N}}.
